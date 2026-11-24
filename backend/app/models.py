@@ -35,14 +35,3 @@ class AnalysisResponse(BaseModel):
     feedback_level: Literal["positive", "retry_supportive", "error"]
     message: str
     next_action: Literal["next", "retry", "error"]
-
-
-class TavusConversationRequest(BaseModel):
-    task_id: Optional[str] = None
-    custom_greeting: Optional[str] = None
-
-
-class TavusConversationResponse(BaseModel):
-    conversation_id: str
-    conversation_url: str
-    status: str

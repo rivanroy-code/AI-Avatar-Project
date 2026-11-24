@@ -1,10 +1,10 @@
 const STATUS = {
   welcome: "Ready",
   instruction: "Task ready",
-  recording: "Listening / simulated input",
+  recording: "Listening",
   analysing: "Analysing",
   feedback: "Feedback ready",
-  retry: "Retry recommended",
+  retry: "Try again",
   error: "Recovery required",
 };
 

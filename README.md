@@ -1,80 +1,87 @@
 # Avatar-Guided Speech Practice — Honours Prototype
 
-A deliberately small vertical-slice research prototype for an avatar-mediated speech-practice interaction.
+A research prototype demonstrating an avatar-guided speech-practice interaction with a live Tavus CVI avatar, deterministic dialogue branches and a mock analysis contract that can later be replaced by a stuttering-detection model.
 
-## What works now
+## Implemented
 
-- Seven interaction outcomes can be exercised through deterministic mock analysis.
-- React frontend calls a FastAPI backend.
-- Backend returns a stable typed integration contract.
-- Feedback is mapped separately from technical event data.
-- Success, retry, low-confidence and backend-error paths are explicit.
-- Tavus CVI integration is isolated behind optional server-side proxy routes, so the app still works without Tavus credentials.
-- Automated backend tests cover the core branches.
+- Tavus CVI embed as the replaceable avatar presentation layer.
+- Programmatic Tavus start/end lifecycle and exact avatar speech (`conversation.echo`).
+- React interaction states: welcome, instruction, attempt, analysing, feedback, retry and error.
+- FastAPI stable analysis contract.
+- Deterministic mock analysis scenarios for success, repetition, prolongation, long pause, low confidence and error.
+- Separate supportive feedback mapping.
+- Deterministic dialogue branches for repeat request, "I don't know", no response and stop.
+- Research-only controls for exercising branches without the final ML detector.
+- Automated backend tests.
 
-## Architecture rationale
+## Architecture
 
-The avatar, UI state, analysis and feedback mapping are separate. This allows the current mock analysis to be replaced by the wider project's stuttering-detection model later without changing the frontend contract.
+The final prototype deliberately separates:
 
-## Run the backend
+1. **Presentation:** Tavus CVI embed.
+2. **Interaction/UI state:** React.
+3. **Analysis and dialogue:** FastAPI.
+4. **Future inference:** stuttering-detection model behind the existing JSON contract.
+
+This allows the interface and evaluation flow to be developed independently of the ML mini-project.
+
+## 1. Backend
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Open `http://localhost:8000/docs` for FastAPI's interactive API documentation.
+Backend API docs: `http://localhost:8000/docs`
 
-## Run tests
+### Backend tests
 
 ```bash
 cd backend
+source .venv/bin/activate
 pytest -q
 ```
 
-## Run the frontend
+## 2. Frontend
 
 ```bash
 cd frontend
-npm install
 cp .env.example .env
+```
+
+Edit `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_TAVUS_DEPLOYMENT_ID=YOUR_EMBED_DEPLOYMENT_ID
+```
+
+Then:
+
+```bash
+npm install
 npm run dev
 ```
 
 Open `http://localhost:5173`.
 
-## Tavus setup
+The Tavus deployment must be **active** and must allow `http://localhost:5173` as an origin.
 
-1. Create/configure a Tavus PAL in Tavus PAL Maker.
-2. Put the server-only API key and PAL ID in `backend/.env`:
+## How to test the complete prototype
 
-```env
-TAVUS_API_KEY=...
-TAVUS_PAL_ID=...
-TAVUS_FACE_ID=...   # optional
-```
+1. Start FastAPI.
+2. Start Vite.
+3. Open the page and click **Start practice**. This programmatically starts the Tavus conversation.
+4. Click **Hear sentence** to make the avatar speak the exercise phrase exactly.
+5. Click **I'm ready**, say the phrase during the live Tavus session, then click **Finish attempt & analyse**.
+6. The current analysis is deterministic/mock by design; the selected scenario controls the returned event, confidence and next action.
+7. The feedback mapper returns supportive wording and the avatar speaks that exact wording.
+8. Use **Research controls** to exercise low-confidence, retry, error and dialogue-intent branches.
 
-3. Restart FastAPI.
-4. Click **Start Tavus session** in the frontend.
+## Important scope statement
 
-The backend creates the Tavus conversation so the API key is never exposed to browser JavaScript.
-
-## Current research limitation
-
-The `/api/analyse` endpoint currently implements mock analysis only. This is intentional for the honours vertical slice: it validates the interaction and integration contract independently of the ML mini-project. Audio/model integration is the next adapter rather than a redesign.
-
-## Test no-build demo
-
-If npm installation is a problem on presentation day, the repository also contains `test-demo/index.html`. Run:
-
-```bash
-cd test-demo
-python -m http.server 5173
-```
-
-Keep FastAPI running on port 8000, then open `http://localhost:5173`. This is only a presentation fallback; the intended frontend remains React/Vite.
+The prototype does **not** diagnose stuttering and does not currently analyse recorded audio. The live Tavus layer handles the embodied interaction; the analysis endpoint deliberately uses mock results so the interface and integration contract can be tested independently of the future ML detector.

@@ -3,16 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routes.analysis import router as analysis_router
-from app.routes.tavus import router as tavus_router
 from app.routes.session import router as session_router
 
 app = FastAPI(
     title="Avatar Speech Therapy Prototype API",
     description=(
-        "Research prototype backend exposing a stable mock-analysis contract and "
-        "an optional Tavus CVI integration boundary."
+        "Research prototype backend exposing a stable mock-analysis contract "
+        "and deterministic dialogue controller."
     ),
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -24,7 +23,6 @@ app.add_middleware(
 )
 
 app.include_router(analysis_router)
-app.include_router(tavus_router)
 app.include_router(session_router)
 
 
@@ -32,5 +30,5 @@ app.include_router(session_router)
 def health_check() -> dict[str, object]:
     return {
         "status": "ok",
-        "tavus_configured": bool(settings.tavus_api_key and settings.tavus_pal_id),
+        "analysis_mode": "deterministic_mock",
     }
