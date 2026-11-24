@@ -68,21 +68,13 @@ The backend creates the Tavus conversation so the API key is never exposed to br
 
 The `/api/analyse` endpoint currently implements mock analysis only. This is intentional for the honours vertical slice: it validates the interaction and integration contract independently of the ML mini-project. Audio/model integration is the next adapter rather than a redesign.
 
-## Emergency no-build demo
+## Test no-build demo
 
-If npm installation is a problem on presentation day, the repository also contains `emergency-demo/index.html`. Run:
+If npm installation is a problem on presentation day, the repository also contains `test-demo/index.html`. Run:
 
 ```bash
-cd emergency-demo
+cd test-demo
 python -m http.server 5173
 ```
 
 Keep FastAPI running on port 8000, then open `http://localhost:5173`. This is only a presentation fallback; the intended frontend remains React/Vite.
-
-## Dialogue-flow prototype
-
-The prototype now includes `POST /api/session/turn`, a deterministic interaction controller based on the wider project's draft exercise flow. It distinguishes conversational intent (answered, repeat request, uncertainty/no response, stop) from the mock speech-event analysis. This keeps the frontend independent of the unfinished ML model while providing repeatable branches for evaluation.
-
-Current automated backend result: **10/10 tests passing**.
-
-> The dialogue wording is a research prototype and should be reviewed by speech-pathology collaborators before child-facing evaluation.
