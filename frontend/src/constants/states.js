@@ -1,4 +1,4 @@
-export const SESSION_STATES = Object.freeze({
+export const SESSION_STATES = {
   WELCOME: "welcome",
   INSTRUCTION: "instruction",
   RECORDING: "recording",
@@ -6,4 +6,5 @@ export const SESSION_STATES = Object.freeze({
   FEEDBACK: "feedback",
   RETRY: "retry",
   ERROR: "error",
-});
+  COMPLETE: "complete",
+};

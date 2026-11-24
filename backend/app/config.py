@@ -10,5 +10,8 @@ load_dotenv()
 class Settings:
     frontend_origin: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
+    class Config:
+        env_file = ".env"
+
 
 settings = Settings()

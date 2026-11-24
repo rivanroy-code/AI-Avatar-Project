@@ -1,0 +1,1052 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import AvatarPanel
+  from "../components/AvatarPanel";
+
+import {
+  SESSION_STATES,
+} from "../constants/states";
+
+import {
+  tasks,
+} from "../data/tasks";
+
+import {
+  analyseSpeech,
+} from "../services/api";
+
+import {
+  speakWithAvatar,
+  startAvatarConversation,
+  endAvatarConversation,
+} from "../services/tavus";
+
+function normaliseText(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPrototypeScenario(
+  spokenText,
+  targetText
+) {
+  const spoken =
+    normaliseText(spokenText);
+
+  const target =
+    normaliseText(targetText);
+
+  if (!spoken) {
+    return "low_confidence";
+  }
+
+  if (spoken === target) {
+    return "success";
+  }
+
+  const spokenWords =
+    spoken.split(" ");
+
+  const targetWords =
+    target.split(" ");
+
+  const matchingWords =
+    targetWords.filter(
+      (word) =>
+        spokenWords.includes(word)
+    ).length;
+
+  const similarity =
+    matchingWords /
+    targetWords.length;
+
+  if (similarity >= 0.8) {
+    return "success";
+  }
+
+  return "repetition";
+}
+
+
+export default function PracticeSession() {
+
+  const tavusRef =
+    useRef(null);
+
+
+  const [
+    sessionState,
+    setSessionState,
+  ] = useState(
+    SESSION_STATES.WELCOME
+  );
+
+
+  const [
+    avatarConnected,
+    setAvatarConnected,
+  ] = useState(false);
+
+
+  const [
+    taskIndex,
+    setTaskIndex,
+  ] = useState(0);
+
+
+  const [
+    feedback,
+    setFeedback,
+  ] = useState(null);
+
+
+  const [
+    mockScenario,
+    setMockScenario,
+  ] = useState("success");
+
+
+  const [
+    capturedSpeech,
+    setCapturedSpeech,
+  ] = useState("");
+
+
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
+
+
+  const currentTask =
+    tasks[taskIndex];
+
+
+  function speak(text) {
+    speakWithAvatar(
+      tavusRef.current,
+      text
+    );
+  }
+
+
+  async function handleStartPractice() {
+
+    try {
+
+      if (!avatarConnected) {
+
+        await startAvatarConversation(
+          tavusRef.current
+        );
+
+        setAvatarConnected(true);
+      }
+
+
+      setFeedback(null);
+
+      setSessionState(
+        SESSION_STATES.INSTRUCTION
+      );
+
+
+      setTimeout(() => {
+
+        speak(
+          `Let's practise this phrase. Listen first: ${currentTask.prompt}`
+        );
+
+      }, 500);
+
+    } catch (error) {
+
+      console.error(
+        "Could not start Tavus:",
+        error
+      );
+
+
+      setFeedback({
+        message:
+          "The avatar could not be started. Please try again.",
+      });
+
+
+      setSessionState(
+        SESSION_STATES.ERROR
+      );
+    }
+  }
+
+
+  function handleStartRecording() {
+
+    setFeedback(null);
+
+    setCapturedSpeech("");
+
+
+    setSessionState(
+      SESSION_STATES.RECORDING
+    );
+
+
+    speak(
+      `Now it's your turn. Say: ${currentTask.prompt}`
+    );
+  }
+
+
+  async function handleFinishAttempt() {
+
+    /*
+     * Analysis may ONLY begin from
+     * the recording state.
+     */
+    if (
+      sessionState !==
+      SESSION_STATES.RECORDING
+    ) {
+      console.warn(
+        "Analysis ignored because the application was not recording."
+      );
+
+      return;
+    }
+
+
+    /*
+     * Prevent double-clicks /
+     * duplicate backend requests.
+     */
+    if (isSubmitting) {
+      return;
+    }
+
+
+    setIsSubmitting(true);
+
+
+    setSessionState(
+      SESSION_STATES.ANALYSING
+    );
+
+
+    speak(
+      "Thanks. I'm checking that response now."
+    );
+
+
+    try {
+
+      const derivedScenario =
+        getPrototypeScenario(
+            capturedSpeech,
+            currentTask.prompt
+        );
+
+        console.log(
+        "Captured speech:",
+        capturedSpeech
+        );
+
+        console.log(
+        "Target:",
+        currentTask.prompt
+        );
+
+        console.log(
+        "Derived prototype scenario:",
+        derivedScenario
+        );
+
+        const result =
+        await analyseSpeech({
+            taskId:
+            currentTask.id,
+
+            mockScenario:
+            derivedScenario,
+        });
+
+
+      setFeedback(result);
+
+
+      /*
+       * IMPORTANT:
+       *
+       * We do NOT automatically
+       * progress to the next task.
+       *
+       * The app stops at feedback
+       * until the user presses a
+       * button.
+       */
+
+      if (
+        result.next_action ===
+        "retry"
+      ) {
+
+        setSessionState(
+          SESSION_STATES.RETRY
+        );
+
+      } else if (
+        result.next_action ===
+        "error"
+      ) {
+
+        setSessionState(
+          SESSION_STATES.ERROR
+        );
+
+      } else {
+
+        setSessionState(
+          SESSION_STATES.FEEDBACK
+        );
+      }
+
+
+      /*
+       * Tavus says exactly the
+       * feedback generated by our
+       * backend.
+       */
+      speak(
+        result.message
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Analysis failed:",
+        error
+      );
+
+
+      const message =
+        "Something went wrong while checking that response. Please try again.";
+
+
+      setFeedback({
+        message,
+      });
+
+
+      setSessionState(
+        SESSION_STATES.ERROR
+      );
+
+
+      speak(message);
+
+    } finally {
+
+      setIsSubmitting(false);
+    }
+  }
+
+
+  function handleRetry() {
+
+    setFeedback(null);
+
+    setCapturedSpeech("");
+
+
+    setSessionState(
+      SESSION_STATES.INSTRUCTION
+    );
+
+
+    speak(
+      `Let's try that phrase again. Listen first: ${currentTask.prompt}`
+    );
+  }
+
+
+  function handleNextTask() {
+
+    const nextIndex =
+      taskIndex + 1;
+
+
+    /*
+     * No tasks remaining.
+     */
+    if (
+      nextIndex >=
+      tasks.length
+    ) {
+
+      setSessionState(
+        SESSION_STATES.COMPLETE
+      );
+
+
+      speak(
+        "Thanks for practising with me today. You've finished all of the sentences."
+      );
+
+      return;
+    }
+
+
+    /*
+     * Move forward only because
+     * the user clicked Next Task.
+     */
+    setTaskIndex(
+      nextIndex
+    );
+
+
+    setFeedback(null);
+
+    setCapturedSpeech("");
+
+
+    setSessionState(
+      SESSION_STATES.INSTRUCTION
+    );
+
+
+    const nextTask =
+      tasks[nextIndex];
+
+
+    speak(
+      `Let's try another one. Listen first: ${nextTask.prompt}`
+    );
+  }
+
+
+  async function handleStopSession() {
+
+    setSessionState(
+      SESSION_STATES.COMPLETE
+    );
+
+
+    speak(
+      "That's okay. Thanks for practising with me today."
+    );
+
+
+    /*
+     * Give Tavus time to say the
+     * closing message.
+     */
+    setTimeout(() => {
+
+      endAvatarConversation(
+        tavusRef.current
+      );
+
+      setAvatarConnected(false);
+
+    }, 2500);
+  }
+
+
+  /*
+   * Tavus transcript listener.
+   *
+   * IMPORTANT:
+   *
+   * User speech NEVER changes
+   * application state here.
+   *
+   * It is only stored if React is
+   * currently in RECORDING.
+   */
+  useEffect(() => {
+
+    const tavusElement =
+      tavusRef.current;
+
+
+    if (!tavusElement) {
+      return;
+    }
+
+
+    function handleProtocolMessage(
+      event
+    ) {
+
+      const detail =
+        event.detail;
+
+
+      if (!detail) {
+        return;
+      }
+
+
+      const {
+        event_type,
+        properties,
+      } = detail;
+
+
+      if (
+        event_type !==
+        "conversation.utterance"
+      ) {
+        return;
+      }
+
+
+      if (
+        properties?.role !==
+        "user"
+      ) {
+        return;
+      }
+
+
+      /*
+       * Ignore Tavus streaming
+       * transcription updates.
+       */
+      if (
+        typeof properties?.final ===
+        "boolean"
+      ) {
+        return;
+      }
+
+
+      /*
+       * Ignore speech unless React
+       * explicitly says we are
+       * recording.
+       */
+      if (
+        sessionState !==
+        SESSION_STATES.RECORDING
+      ) {
+
+        console.log(
+          "Speech ignored outside recording state:",
+          properties?.speech
+        );
+
+        return;
+      }
+
+
+      if (
+        !properties?.speech
+      ) {
+        return;
+      }
+
+
+      setCapturedSpeech(
+        properties.speech
+      );
+
+
+      console.log(
+        "Captured exercise speech:",
+        properties.speech
+      );
+
+
+      /*
+       * DO NOT:
+       *
+       * - analyse here
+       * - move state here
+       * - call handleNextTask here
+       *
+       * The user must press
+       * Done speaking.
+       */
+    }
+
+
+    tavusElement.addEventListener(
+      "tavus:protocol-message",
+      handleProtocolMessage
+    );
+
+
+    return () => {
+
+      tavusElement.removeEventListener(
+        "tavus:protocol-message",
+        handleProtocolMessage
+      );
+    };
+
+  }, [sessionState]);
+
+
+  return (
+
+    <main className="practice-page">
+
+
+      {/* HEADER */}
+
+      <header className="page-header">
+
+        <div>
+
+          <p className="eyebrow">
+            HONOURS RESEARCH PROTOTYPE
+          </p>
+
+          <h1>
+            Avatar-Guided Speech Practice
+          </h1>
+
+        </div>
+
+
+        <span className="prototype-badge">
+          Non-clinical prototype
+        </span>
+
+      </header>
+
+
+      {/* MAIN CONTENT */}
+
+      <section className="practice-layout">
+
+
+        {/* AVATAR */}
+
+        <AvatarPanel
+          ref={tavusRef}
+
+          sessionState={
+            sessionState
+          }
+
+          avatarConnected={
+            avatarConnected
+          }
+        />
+
+
+        {/* PRACTICE PANEL */}
+
+        <section className="practice-card">
+
+
+          <div className="status-pill">
+
+            Status:{" "}
+
+            {sessionState}
+
+          </div>
+
+
+          {/* WELCOME */}
+
+          {sessionState ===
+            SESSION_STATES.WELCOME && (
+
+            <>
+
+              <h2>
+                Welcome
+              </h2>
+
+
+              <p>
+                Hi! I'm your practice
+                guide. We'll practise a
+                few short sentences
+                together.
+              </p>
+
+
+              <p>
+                You can take your time,
+                ask to hear a sentence
+                again, or stop whenever
+                you want.
+              </p>
+
+
+              <button
+                onClick={
+                  handleStartPractice
+                }
+              >
+                Start practice
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* INSTRUCTION */}
+
+          {sessionState ===
+            SESSION_STATES.INSTRUCTION && (
+
+            <>
+
+              <h2>
+                Let's practise this phrase
+              </h2>
+
+
+              <div className="phrase-card">
+
+                “{currentTask.prompt}”
+
+              </div>
+
+
+              <p>
+                Listen first, then you can
+                have a turn.
+              </p>
+
+
+              <button
+                onClick={
+                  handleStartRecording
+                }
+              >
+                I'm ready
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* RECORDING */}
+
+          {sessionState ===
+            SESSION_STATES.RECORDING && (
+
+            <>
+
+              <h2>
+                Now it's your turn
+              </h2>
+
+
+              <p>
+                Say:
+              </p>
+
+
+              <div className="phrase-card">
+
+                “{currentTask.prompt}”
+
+              </div>
+
+
+              <div className="listening-indicator">
+
+                Listening...
+
+              </div>
+
+
+              {capturedSpeech && (
+
+                <p
+                  style={{
+                    color: "#65758c",
+                    fontSize: "0.9rem",
+                  }}
+                >
+
+                  Speech detected.
+
+                </p>
+
+              )}
+
+
+              <button
+                className="danger-button"
+
+                onClick={
+                  handleFinishAttempt
+                }
+
+                disabled={
+                  isSubmitting
+                }
+              >
+
+                {isSubmitting
+                  ? "Analysing..."
+                  : "Done speaking"}
+
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* ANALYSING */}
+
+          {sessionState ===
+            SESSION_STATES.ANALYSING && (
+
+            <>
+
+              <h2>
+                Analysing your response
+              </h2>
+
+
+              <div className="spinner" />
+
+
+              <p>
+                This usually takes a few
+                seconds.
+              </p>
+
+            </>
+
+          )}
+
+
+          {/* SUCCESS FEEDBACK */}
+
+          {sessionState ===
+            SESSION_STATES.FEEDBACK && (
+
+            <>
+
+              <h2>
+                Practice complete
+              </h2>
+
+
+              <p>
+                {feedback?.message}
+              </p>
+
+
+              <button
+                onClick={
+                  handleNextTask
+                }
+              >
+                Next task
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* RETRY */}
+
+          {sessionState ===
+            SESSION_STATES.RETRY && (
+
+            <>
+
+              <h2>
+                Let's have another go
+              </h2>
+
+
+              <p>
+                {feedback?.message}
+              </p>
+
+
+              <button
+                onClick={
+                  handleRetry
+                }
+              >
+                Try again
+              </button>
+
+
+              <button
+                className="secondary-button"
+
+                onClick={
+                  handleNextTask
+                }
+              >
+                Next task
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* ERROR */}
+
+          {sessionState ===
+            SESSION_STATES.ERROR && (
+
+            <>
+
+              <h2>
+                Something went wrong
+              </h2>
+
+
+              <p>
+                {feedback?.message ??
+                  "Please try again."}
+              </p>
+
+
+              <button
+                onClick={
+                  handleRetry
+                }
+              >
+                Try again
+              </button>
+
+            </>
+
+          )}
+
+
+          {/* COMPLETE */}
+
+          {sessionState ===
+            SESSION_STATES.COMPLETE && (
+
+            <>
+
+              <h2>
+                Finished
+              </h2>
+
+
+              <p>
+                Thanks for practising
+                with me today.
+              </p>
+
+            </>
+
+          )}
+
+
+          {/* RESEARCH CONTROLS */}
+
+          <div className="research-controls">
+
+            <details>
+
+              <summary>
+                Research controls
+              </summary>
+
+
+              <label>
+                Mock analysis result
+              </label>
+
+
+              <select
+                value={
+                  mockScenario
+                }
+
+                onChange={
+                  (event) =>
+                    setMockScenario(
+                      event.target.value
+                    )
+                }
+              >
+
+                <option value="success">
+                  Success
+                </option>
+
+                <option value="repetition">
+                  Repetition
+                </option>
+
+                <option value="prolongation">
+                  Prolongation
+                </option>
+
+                <option value="pause">
+                  Long pause
+                </option>
+
+                <option value="low_confidence">
+                  Low confidence
+                </option>
+
+                <option value="error">
+                  Backend error
+                </option>
+
+              </select>
+
+
+              <div>
+
+                <button
+                  className="secondary-button"
+
+                  onClick={
+                    handleStopSession
+                  }
+                >
+                  Stop session
+                </button>
+
+              </div>
+
+            </details>
+
+          </div>
+
+        </section>
+
+      </section>
+
+
+      {/* DISCLAIMER */}
+
+      <footer className="prototype-footer">
+
+        Research prototype only.
+        The system does not diagnose
+        stuttering or replace a speech
+        pathologist.
+
+      </footer>
+
+    </main>
+  );
+}
