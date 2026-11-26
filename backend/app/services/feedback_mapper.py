@@ -11,7 +11,6 @@ class Feedback:
 
 
 def map_feedback(result: MockAnalysisResult) -> Feedback:
-    """Translate technical analysis data into supportive, non-diagnostic UI text."""
     if result.analysis_status == "error":
         return Feedback(
             feedback_level="error",

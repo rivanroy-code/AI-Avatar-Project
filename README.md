@@ -1,42 +1,76 @@
 # Avatar-Guided Speech Practice — Honours Prototype
 
-A research prototype demonstrating an avatar-guided speech-practice interaction with a live Tavus CVI avatar, deterministic dialogue branches and a mock analysis contract that can later be replaced by a stuttering-detection model.
+A browser-based honours research prototype integrating a live Tavus avatar with a React interaction interface and a FastAPI deterministic mock-analysis backend.
 
-## Implemented
+## Scope
 
-- Tavus CVI embed as the replaceable avatar presentation layer.
-- Programmatic Tavus start/end lifecycle and exact avatar speech (`conversation.echo`).
-- React interaction states: welcome, instruction, attempt, analysing, feedback, retry and error.
-- FastAPI stable analysis contract.
-- Deterministic mock analysis scenarios for success, repetition, prolongation, long pause, low confidence and error.
-- Separate supportive feedback mapping.
-- Deterministic dialogue branches for repeat request, "I don't know", no response and stop.
-- Research-only controls for exercising branches without the final ML detector.
-- Automated backend tests.
+This project demonstrates an end-to-end avatar-guided speech-practice and system-integration workflow. It does **not** claim to perform clinical stuttering detection or provide speech therapy.
+
+The current backend deliberately returns deterministic mock-analysis outcomes so that the frontend, avatar interaction, feedback behaviour, error handling and integration contract can be developed and evaluated independently of the future machine-learning stuttering detector.
+
+The prototype supports:
+
+- Tavus as a replaceable avatar presentation layer
+- React-controlled Welcome, Instruction, Recording, Feedback, Retry, Error/Fallback and Complete states
+- speech-activity detection during the live Tavus interaction
+- explicit user submission through **Done speaking**
+- a stable FastAPI `/api/analyse` JSON contract
+- deterministic success, repetition-style retry, low-confidence retry and backend-error scenarios
+- supportive user-facing feedback separated from technical analysis output
+- controlled avatar wording and interaction behaviour
+- retry, progression, stopping and error-recovery pathways
+- automated backend tests
+
+The frontend remains the authoritative controller of task progression. Tavus presents the avatar and spoken interaction but does not independently determine whether speech was successful, classify stuttering, select feedback or advance the activity.
 
 ## Architecture
 
-The final prototype deliberately separates:
+```text
+            Tavus avatar
+                 ▲
+                 │
+        presentation / speech
+                 │
+                 ▼
+        React / Vite frontend
+   interaction state + task controls
+                 │
+                 │ stable JSON contract
+                 ▼
+          FastAPI backend
+ deterministic mock analysis
+       + feedback mapping
+                 │
+                 │ future adapter
+                 ▼
+    ML stuttering detector
+```
 
-1. **Presentation:** Tavus CVI embed.
-2. **Interaction/UI state:** React.
-3. **Analysis and dialogue:** FastAPI.
-4. **Future inference:** stuttering-detection model behind the existing JSON contract.
+The frontend depends on the structured `AnalysisResponse` contract rather than on the internal implementation of the analysis component. A future machine-learning detector can therefore replace the deterministic mock service while preserving the same frontend interaction structure.
 
-This allows the interface and evaluation flow to be developed independently of the ML mini-project.
+## Backend
 
-## 1. Backend
+From the project root:
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Backend API docs: `http://localhost:8000/docs`
+Health check:
+
+```text
+http://localhost:8000/health
+```
+
+Swagger/API documentation:
+
+```text
+http://localhost:8000/docs
+```
 
 ### Backend tests
 
@@ -46,42 +80,96 @@ source .venv/bin/activate
 pytest -q
 ```
 
-## 2. Frontend
+Expected result:
+
+```text
+10 passed
+```
+
+## Frontend
+
+Create the local environment file:
 
 ```bash
 cd frontend
 cp .env.example .env
 ```
 
-Edit `frontend/.env`:
+Configure `frontend/.env`:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000
-VITE_TAVUS_DEPLOYMENT_ID=YOUR_EMBED_DEPLOYMENT_ID
+VITE_TAVUS_DEPLOYMENT_ID=YOUR_TAVUS_EMBED_DEPLOYMENT_ID
 ```
 
-Then:
+Install dependencies and run the frontend:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open:
 
-The Tavus deployment must be **active** and must allow `http://localhost:5173` as an origin.
+```text
+http://localhost:5173
+```
 
-## How to test the complete prototype
+The Tavus deployment must be active and configured to allow the local frontend origin.
 
-1. Start FastAPI.
-2. Start Vite.
-3. Open the page and click **Start practice**. This programmatically starts the Tavus conversation.
-4. Click **Hear sentence** to make the avatar speak the exercise phrase exactly.
-5. Click **I'm ready**, say the phrase during the live Tavus session, then click **Finish attempt & analyse**.
-6. The current analysis is deterministic/mock by design; the selected scenario controls the returned event, confidence and next action.
-7. The feedback mapper returns supportive wording and the avatar speaks that exact wording.
-8. Use **Research controls** to exercise low-confidence, retry, error and dialogue-intent branches.
+## Tavus configuration
 
-## Important scope statement
+The Tavus avatar is configured as a controlled presentation layer for the research prototype.
 
-The prototype does **not** diagnose stuttering and does not currently analyse recorded audio. The live Tavus layer handles the embodied interaction; the analysis endpoint deliberately uses mock results so the interface and integration contract can be tested independently of the future ML detector.
+It should not independently:
+
+- diagnose stuttering
+- assess speech severity
+- decide whether speech is correct, incorrect, fluent or dysfluent
+- recommend treatment techniques
+- determine task progression
+- generate independent clinical feedback
+
+The React application controls the activity and supplies the task and feedback wording used by the avatar.
+
+Additional Tavus guardrails address clinical boundaries, feedback boundaries, treatment advice, system uncertainty, stopping behaviour and privacy.
+
+## Demonstrating the prototype
+
+1. Run the FastAPI backend and React frontend in separate terminals.
+2. Open the web application.
+3. Start the Tavus interaction and select **Start practice**.
+4. The application presents the current practice phrase.
+5. Select **I'm ready** to enter the Recording state.
+6. Speak during the Tavus session. The interface acknowledges when speech activity is detected.
+7. Select **Done speaking** to submit the attempt.
+8. The frontend sends an analysis request to `/api/analyse`.
+9. The structured backend response maps to a Feedback, Retry or Error/Fallback state.
+10. The user can retry the phrase, continue to the next task or stop the session.
+11. After the final task, the application enters the Complete state.
+
+The demonstration sequence uses predefined deterministic backend outcomes so that major interaction branches can be exercised reproducibly without exposing developer controls in the participant-facing interface.
+
+## Important limitations
+
+This prototype does **not** diagnose stuttering and does **not** classify live speech for stuttering-related events.
+
+The Tavus interaction is used to provide embodied speech interaction and detect that user speech has occurred. The downstream analysis result is deterministic and simulated by design.
+
+The current prototype is intended to demonstrate:
+
+- avatar-guided speech interaction
+- frontend state management
+- frontend-to-backend communication
+- a stable analysis integration contract
+- supportive feedback mapping
+- retry and error handling
+- a path for later integration of the separate machine-learning stuttering detector
+
+It has not been clinically validated or evaluated with children or parents.
+
+## Research context
+
+This prototype forms the interface and system-integration component of a wider honours research project investigating AI-supported speech pathology.
+
+Its main contribution is the separation of the avatar presentation layer, frontend interaction state, backend analysis interface and future machine-learning component so that each can be developed or replaced independently.

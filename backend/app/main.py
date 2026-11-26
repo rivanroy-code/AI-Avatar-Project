@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.routes.analysis import router as analysis_router
 from app.routes.session import router as session_router
 

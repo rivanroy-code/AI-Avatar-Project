@@ -9,8 +9,6 @@ router = APIRouter(prefix="/api", tags=["analysis"])
 
 @router.post("/analyse", response_model=AnalysisResponse)
 def analyse(request: AnalysisRequest) -> AnalysisResponse:
-    # The current honours prototype deliberately uses deterministic mock analysis.
-    # Audio/text adapters can later produce the same AnalysisResponse contract.
     if request.input_type != "mock":
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -25,10 +23,10 @@ def analyse(request: AnalysisRequest) -> AnalysisResponse:
 
     return AnalysisResponse(
         task_id=request.task_id,
-        analysis_status=result.analysis_status,  # type: ignore[arg-type]
+        analysis_status=result.analysis_status,
         detected_event=result.detected_event,
         confidence=result.confidence,
-        feedback_level=feedback.feedback_level,  # type: ignore[arg-type]
+        feedback_level=feedback.feedback_level,
         message=feedback.message,
-        next_action=feedback.next_action,  # type: ignore[arg-type]
+        next_action=feedback.next_action,
     )

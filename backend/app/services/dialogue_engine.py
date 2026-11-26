@@ -4,12 +4,7 @@ from app.services.mock_analysis import analyse_mock
 
 
 def handle_dialogue_turn(request: DialogueTurnRequest) -> DialogueTurnResponse:
-    """Deterministic dialogue controller for the prototype exercise flow.
 
-    This layer models interaction intent separately from speech-event analysis.
-    The wording is deliberately supportive and non-diagnostic and should be
-    reviewed by speech-pathology collaborators before any child-facing study.
-    """
     if request.child_intent == "stop":
         return DialogueTurnResponse(
             task_id=request.task_id,
@@ -55,7 +50,6 @@ def handle_dialogue_turn(request: DialogueTurnRequest) -> DialogueTurnResponse:
             next_action="wait",
         )
 
-    # A spoken answer is the only branch that invokes the analysis adapter.
     result = analyse_mock(request.mock_scenario)
     feedback = map_feedback(result)
     return DialogueTurnResponse(
